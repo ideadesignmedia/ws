@@ -84,9 +84,9 @@ const newSocket = function (address, onOpen = () => { }, onMessage = (type, data
     this.waitForSocketConnection = (callback, data, timer = 1000, attempts = 1) => {
         clearTimeout(this.socketWait)
         if (!callback || typeof callback !== 'function') return
-        if (this.ws.readyState === 0) {
+        if (this.ws.readyState !== WS.OPEN && attempts < 10) {
             this.socketWait = setTimeout(() => { this.waitForSocketConnection(callback, data, timer) }, timer * (attempts + 1), attempts + 1)
-        } else if (this.ws.readyState === 1) {
+        } else if (this.ws.readyState === WS.OPEN) {
             callback(data)
         } else {
             this.socketWait = this.waitForSocketConnection(callback, data, timer * (attempts + 1), attempts + 1)
@@ -100,7 +100,7 @@ const newSocket = function (address, onOpen = () => { }, onMessage = (type, data
             this.ws = new WS(address)
             this.ws.onMessage = onMessage
             this.ws.sendData = (data) => {
-                if (this.ws.readyState !== 1) {
+                if (this.ws.readyState !== WS.OPEN) {
                     this.waitForSocketConnection(data => { this.ws.send(JSON.stringify(data)) }, data)
                 } else {
                     this.ws.send(JSON.stringify(data))
@@ -127,7 +127,6 @@ const newSocket = function (address, onOpen = () => { }, onMessage = (type, data
             this.ws.onclose = this.onclose
             this.ws.connects = this.socketCount
         } catch (e) {
-            console.log(`WS ERROR: ${JSON.stringify(e)}`)
             this.hitError = true
             this.failedConnections++
             this.retryTimer = setTimeout(() => {
@@ -151,13 +150,17 @@ const newSocket = function (address, onOpen = () => { }, onMessage = (type, data
             clearTimeout(this.socketWait)
         }
     }
-    this.onerror = () => {
+    this.onerror = (e) => {
+        console.error(e)
         this.hitError = true
         this.failedConnections++
     }
     this.closeConnect = () => {
         this.closedConnection = true
-        this.ws.onerror = () => { }
+        this.ws.onerror = (e) => { 
+            console.error(e)
+            this.hitError = true
+        }
         this.hitError = false
         clearTimeout(this.retryTimer)
         this.ws.close()
